@@ -1,0 +1,320 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Love Teller</title>
+<style>
+  :root{
+    --bg1:#ffdee9; --bg2:#b5fffc;
+    --accent:#ff2d55; --dark:#1e1e2f; --light:#fff;
+  }
+
+  /* Animated gradient background */
+  body{
+    margin:0; min-height:100svh; display:grid; place-items:center;
+    background: linear-gradient(135deg,var(--bg1),var(--bg2));
+    background-size: 200% 200%;
+    animation: bgshift 12s ease-in-out infinite;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+    color:var(--dark);
+  }
+  @keyframes bgshift{
+    0%{background-position: 0% 50%}
+    50%{background-position: 100% 50%}
+    100%{background-position: 0% 50%}
+  }
+
+  .card{
+    width:min(560px,92vw); padding:28px 24px; border-radius:24px;
+    background:rgba(255,255,255,.75); backdrop-filter: blur(10px);
+    box-shadow: 0 20px 60px rgba(0,0,0,.12);
+    text-align:center;
+  }
+  h1{
+    margin:0 0 10px; font-size:clamp(28px,4.5vw,40px);
+    letter-spacing:.5px;
+  }
+  p{ margin:0 0 18px; opacity:.85 }
+
+  .input-row{
+    display:flex; gap:12px; justify-content:center; align-items:center; margin-top:12px;
+  }
+  input[type="text"]{
+    flex:1; min-width:0;
+    font-size:18px; padding:14px 16px; border-radius:14px; border:2px solid transparent;
+    outline:none; background:#fff;
+    box-shadow: inset 0 1px 0 rgba(0,0,0,.04);
+  }
+  input[type="text"]::placeholder{ color:#9aa1a8 }
+  input[type="text"]:focus{ border-color:#ffc0cb }
+  button{
+    padding:14px 18px; border:none; border-radius:14px; font-size:16px;
+    background:var(--accent); color:#fff; cursor:pointer;
+    transition: transform .04s ease, filter .2s ease;
+  }
+  button:active{ transform: translateY(1px) }
+  .hint{ font-size:13px; opacity:.7; margin-top:10px }
+
+  /* Shake animation for wrong date */
+  .shake{ animation: shake .35s linear }
+  @keyframes shake{
+    0%,100%{ transform:translateX(0) }
+    20%{ transform:translateX(-6px) }
+    40%{ transform:translateX(6px) }
+    60%{ transform:translateX(-4px) }
+    80%{ transform:translateX(4px) }
+  }
+
+  /* LOVE overlay */
+  .overlay{
+    position:fixed; inset:0; display:none; place-items:center; z-index:10;
+    background: radial-gradient(1200px 600px at 50% -10%, rgba(255,255,255,.6), rgba(255,255,255,.1) 70%), 
+                linear-gradient(135deg,#fff0f6 0%, #ffe3ec 30%, #fff6e7 60%, #e7fff7 100%);
+    animation: bgshift 14s ease-in-out infinite;
+  }
+  .overlay.show{ display:grid }
+  .love-card{
+    width:min(720px,92vw); padding:40px 28px; border-radius:28px; text-align:center;
+    background:rgba(255,255,255,.85); backdrop-filter: blur(12px);
+    box-shadow: 0 30px 80px rgba(0,0,0,.18); position:relative; overflow:hidden;
+  }
+
+  /* Typewriter message */
+  .type{
+    display:inline-block; white-space:nowrap; border-right:2px solid var(--accent);
+    font-size:clamp(22px,4.8vw,34px); padding:6px 2px; margin:8px 0 16px;
+    animation: caret 1s steps(1) infinite;
+  }
+  @keyframes caret{ 50%{ border-color: transparent } }
+
+  .sub{
+    font-size:clamp(14px,2.4vw,18px); opacity:.85; margin-bottom:16px;
+  }
+
+  /* Floating hearts */
+  .hearts{ position:absolute; inset:0; overflow:hidden; pointer-events:none }
+  .heart{
+    --x: 50;
+    position:absolute; left: calc(var(--x) * 1%); bottom:-40px; width:22px; height:22px;
+    transform: rotate(45deg); opacity:.8;
+    animation: floatUp linear var(--t) infinite;
+  }
+  .heart::before, .heart::after{
+    content:""; position:absolute; width:22px; height:22px; background:var(--accent);
+    border-radius:50%;
+  }
+  .heart::before{ left:-11px }
+  .heart::after{ top:-11px }
+  @keyframes floatUp{
+    0%{ transform: translateY(0) rotate(45deg) scale(.9); opacity:.0 }
+    10%{ opacity:.9 }
+    100%{ transform: translateY(-120vh) rotate(45deg) scale(1.2); opacity:0 }
+  }
+
+  /* CTA */
+  .row{ margin-top:18px; display:flex; gap:12px; justify-content:center; flex-wrap:wrap }
+  .soft{
+    background:#fff; color:var(--accent); border:2px solid var(--accent);
+  }
+  .credit{ position:fixed; bottom:10px; left:50%; transform:translateX(-50%); font-size:12px; opacity:.6 }
+
+  /* Canvas full width for confetti without blocking */
+  canvas#confetti{ position:fixed; inset:0; pointer-events:none }
+
+  /* small helper for accessibility */
+  .sr{ position:absolute; left:-9999px; width:1px; height:1px; overflow:hidden }
+</style>
+</head>
+<body>
+  <main class="card" id="card">
+    <h1>💌 Love Teller</h1>
+    <p>Enter the magic birthday to unlock your message.</p>
+
+    <form id="form" autocomplete="off">
+      <label class="sr" for="dob">Birthday (dd/mm/yyyy)</label>
+      <div class="input-row">
+        <input id="dob" name="dob" type="text" inputmode="numeric" placeholder="dd/mm/yyyy" maxlength="10" />
+        <button type="submit">Tell my love</button>
+      </div>
+      <div class="hint">Hint: format like <b>20/06/2005</b></div>
+    </form>
+  </main>
+
+  <!-- LOVE OVERLAY -->
+  <section class="overlay" id="overlay" aria-hidden="true">
+    <div class="love-card">
+      <div class="hearts" id="hearts"></div>
+      <h2 class="type" id="type"></h2>
+      <p class="sub">On <b>20/06/2005</b>, the universe quietly planned something special. And today, it led you here. 💖</p>
+      <div class="row">
+        <button class="soft" id="backBtn">Back</button>
+        <button id="moreBtn">One more surprise ✨</button>
+      </div>
+    </div>
+  </section>
+
+  <canvas id="confetti"></canvas>
+
+<script>
+  // === Helpers ===
+  const MAGIC = "20/06/2005";
+  const form = document.getElementById('form');
+  const dob = document.getElementById('dob');
+  const card = document.getElementById('card');
+
+  const overlay = document.getElementById('overlay');
+  const typeEl = document.getElementById('type');
+  const heartsWrap = document.getElementById('hearts');
+  const backBtn = document.getElementById('backBtn');
+  const moreBtn = document.getElementById('moreBtn');
+
+  // Normalize various inputs: 20-06-2005, 2005-06-20 (from date pickers), spaces, dots, etc.
+  function normalize(s){
+    if(!s) return "";
+    s = s.trim();
+    // if yyyy-mm-dd, swap to dd/mm/yyyy
+    const iso = /^(\d{4})[-.\/](\d{2})[-.\/](\d{2})$/;
+    const dmy = /^(\d{2})[-.\/](\d{2})[-.\/](\d{4})$/;
+    if(iso.test(s)){
+      const [,y,m,d] = s.match(iso);
+      return `${d}/${m}/${y}`;
+    }else if(dmy.test(s)){
+      const [,d,m,y] = s.match(dmy);
+      return `${d}/${m}/${y}`;
+    }
+    // remove non-digits and reformat if possible
+    const digits = s.replace(/\D+/g,"");
+    if(digits.length === 8){
+      return `${digits.slice(0,2)}/${digits.slice(2,4)}/${digits.slice(4)}`;
+    }
+    return s;
+  }
+
+  // Typewriter effect
+  async function typeText(el, text, speed=35){
+    el.textContent = "";
+    for(let i=0;i<text.length;i++){
+      el.textContent += text[i];
+      await new Promise(r=>setTimeout(r, speed));
+    }
+  }
+
+  // Floating hearts generator
+  function spawnHearts(){
+    heartsWrap.innerHTML = "";
+    const count = 24;
+    for(let i=0;i<count;i++){
+      const h = document.createElement('div');
+      h.className = 'heart';
+      h.style.setProperty('--x', Math.floor(Math.random()*100));
+      h.style.setProperty('--t', (10 + Math.random()*12).toFixed(2) + 's');
+      h.style.opacity = (0.5 + Math.random()*0.5).toFixed(2);
+      h.style.filter = `hue-rotate(${Math.floor(Math.random()*20)-10}deg)`;
+      heartsWrap.appendChild(h);
+    }
+  }
+
+  // Confetti (tiny, lightweight)
+  const confettiCanvas = document.getElementById('confetti');
+  const ctx = confettiCanvas.getContext('2d');
+  let confettiPieces = [];
+  function resizeCanvas(){
+    confettiCanvas.width = innerWidth; confettiCanvas.height = innerHeight;
+  }
+  window.addEventListener('resize', resizeCanvas); resizeCanvas();
+
+  function launchConfetti(bursts=180){
+    confettiPieces = [];
+    for(let i=0;i<bursts;i++){
+      confettiPieces.push({
+        x: innerWidth/2, y: innerHeight/2,
+        vx: (Math.random()*4-2)* (1+Math.random()*1.5),
+        vy: (Math.random()*-4-2)* (1+Math.random()*1.5),
+        size: Math.random()*6+3,
+        rot: Math.random()*Math.PI,
+        vr: (Math.random()-.5)*0.2,
+        life: 120 + Math.random()*60,
+      });
+    }
+  }
+  function stepConfetti(){
+    ctx.clearRect(0,0,confettiCanvas.width, confettiCanvas.height);
+    confettiPieces.forEach(p=>{
+      p.life -= 1;
+      p.x += p.vx; p.y += p.vy;
+      p.vy += 0.06; // gravity
+      p.rot += p.vr;
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.rotate(p.rot);
+      ctx.fillStyle = `hsl(${(p.x/innerWidth)*360}, 90%, 60%)`;
+      ctx.fillRect(-p.size/2,-p.size/2,p.size,p.size);
+      ctx.restore();
+    });
+    confettiPieces = confettiPieces.filter(p=>p.life>0);
+    requestAnimationFrame(stepConfetti);
+  }
+  stepConfetti(); // start loop
+
+  // Open love screen
+  async function openLove(){
+    overlay.classList.add('show');
+    overlay.setAttribute('aria-hidden','false');
+    spawnHearts();
+    launchConfetti();
+    const lines = [
+      "I checked the stars…",
+      "and they spelled your name.",
+      "You are loved. Today. Always. 💗"
+    ];
+    // type one line after another
+    for(const line of lines){ await typeText(typeEl, line, 32); await new Promise(r=>setTimeout(r, 600)); }
+  }
+
+  // Close
+  function closeLove(){
+    overlay.classList.remove('show');
+    overlay.setAttribute('aria-hidden','true');
+    typeEl.textContent = "";
+  }
+
+  // Surprise: shuffle a sweet compliment
+  const compliments = [
+    "Your smile is my favorite notification. 📲💘",
+    "If home had a heartbeat, it would sound like your laugh.",
+    "Every day with you is my lucky day. 🍀",
+    "You’re the plot twist I never saw coming—but always wanted.",
+    "I love you more than yesterday, less than tomorrow."
+  ];
+  moreBtn.addEventListener('click', async ()=>{
+    const msg = compliments[Math.floor(Math.random()*compliments.length)];
+    await typeText(typeEl, msg, 26);
+    launchConfetti(140);
+  });
+
+  backBtn.addEventListener('click', closeLove);
+
+  // Form handling
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    const value = normalize(dob.value);
+    dob.value = value; // reflect normalized
+    if(value === MAGIC){
+      openLove();
+    }else{
+      card.classList.remove('shake');
+      // trigger reflow to restart animation
+      void card.offsetWidth;
+      card.classList.add('shake');
+    }
+  });
+
+  // Enter key focus nicety
+  dob.addEventListener('keyup', (e)=>{
+    if(e.key === 'Enter'){ form.dispatchEvent(new Event('submit', {cancelable:true})); }
+  });
+</script>
+<div class="credit">© your Love Teller · made with ♥</div>
+</body>
+</html>
